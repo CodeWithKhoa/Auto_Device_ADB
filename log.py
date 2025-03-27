@@ -192,7 +192,7 @@ def input_text_vietnamese(text):
     # Dán nội dung bằng Ctrl+V (KEYCODE_PASTE)
     subprocess.run(["adb", "shell", "input", "keyevent", "279"], check=True)
 
-def auto_process(now = "login", fisrtname = "Tài", lastname = "Phan Anh", day = "31", month = "12", year = "2003", sex = "male", email = "yapoko1059@hikuhu.com", password = "Khoatran2006"):
+def auto_process(now = "home", fisrtname = "Tài", lastname = "Phan Anh", day = "31", month = "12", year = "2003", sex = "male", email = "yapoko1059@hikuhu.com", password = "Khoatran2006"):
     width, height = get_screen_size()
     if now=="home":
         """Tự động tìm nút Home, lướt xuống 3-4 lần, rồi tìm nút 'Đăng xuất' bằng hình ảnh."""
@@ -202,6 +202,7 @@ def auto_process(now = "login", fisrtname = "Tài", lastname = "Phan Anh", day =
                 tap(*home_position)
                 print("🏠 Đã nhấn vào nút Home (góc phải).")
                 time.sleep(1)
+                break
             else:
                 print("🔍 Không tìm thấy 'Home', Nhấn quay lại...")
                 subprocess.run(["adb", "shell", "input", "keyevent", "4"], check=True)  # Nhấn nút Back
@@ -485,4 +486,5 @@ def auto_process(now = "login", fisrtname = "Tài", lastname = "Phan Anh", day =
     print(f"Đã tạo thành công email: {email}, Password: {password}")
 
 if __name__ == "__main__":
-    auto_process()
+    now = input()
+    auto_process(now)
