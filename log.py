@@ -1,4 +1,4 @@
-import os
+import os, re
 import subprocess
 import time
 import cv2
@@ -61,18 +61,98 @@ def clear_input():
     except subprocess.CalledProcessError as e:
         print(f"❌ Lỗi khi xóa input: {e}")
 
-def input_text(text):
-    clear_input()
-    """Nhập văn bản vào thiết bị qua ADB"""
-    telex_text = convert_to_telex(text)
-    print(f"🔹 Nhập văn bản: {text} (Telex: {telex_text})")
-    
-    adb_text = telex_text.replace(" ", "%s")
+def get_available_keyboards():
+    """Lấy danh sách các bàn phím khả dụng bằng ADB."""
     try:
-        subprocess.run(["adb", "shell", "input", "text", adb_text], check=True)
-        print("✅ Gửi thành công")
+        result = subprocess.run(
+            ["adb", "shell", "ime", "list", "-a"],
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        keyboards = re.findall(r'mId=([^\s]+)', result.stdout)
+        print(f"🔍 Danh sách bàn phím khả dụng: {keyboards}")
+        return keyboards
     except subprocess.CalledProcessError as e:
-        print(f"❌ Lỗi khi gửi: {e}")
+        print(f"❌ Lỗi khi liệt kê bàn phím: {e.stderr}")
+        return []
+
+def set_keyboard(keyboard_id):
+    """Đặt phương thức nhập (bàn phím) bằng ADB."""
+    global CURRENT_KEYBOARD
+    try:
+        subprocess.run(
+            ["adb", "shell", "ime", "set", keyboard_id],
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        CURRENT_KEYBOARD = keyboard_id  # Cập nhật bàn phím hiện tại
+        print(f"✅ Đã chuyển sang bàn phím: {keyboard_id}")
+        time.sleep(1)  # Thời gian chờ để bàn phím được áp dụng
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Lỗi khi chuyển bàn phím: {e.stderr}")
+        return False
+
+# Khởi tạo danh sách bàn phím và biến flag
+AVAILABLE_KEYBOARDS = get_available_keyboards()
+AVOID_KEYBOARD = "com.google.android.tts/com.google.android.apps.speech.tts.googletts.settings.asr.voiceime.VoiceInputMethodService"
+AVAILABLE_KEYBOARDS = [kb for kb in AVAILABLE_KEYBOARDS if kb != AVOID_KEYBOARD]
+CURRENT_KEYBOARD = None  # Ban đầu chưa có bàn phím nào được chọn
+
+def input_text(text, vi=False):
+    """Nhập văn bản qua ADB, tự động chọn bàn phím phù hợp."""
+    try:
+        # Xóa input hiện tại trước khi nhập
+        clear_input()
+
+        # Kiểm tra danh sách bàn phím toàn cục
+        if not AVAILABLE_KEYBOARDS:
+            print("❌ Không có bàn phím nào khả dụng.")
+            return False
+
+        # Xác định bàn phím mong muốn
+        preferred_keyboard = "com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME" if vi else next(
+            (kb for kb in AVAILABLE_KEYBOARDS if kb != "com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME"), 
+            AVAILABLE_KEYBOARDS[0]
+        )
+
+        # Chỉ chuyển bàn phím nếu chưa đúng
+        if CURRENT_KEYBOARD != preferred_keyboard:
+            if preferred_keyboard in AVAILABLE_KEYBOARDS:
+                if not set_keyboard(preferred_keyboard):
+                    print(f"❌ Không thể chuyển sang bàn phím: {preferred_keyboard}")
+                    return False
+            else:
+                print(f"❌ Bàn phím mong muốn ({preferred_keyboard}) không có trong danh sách: {AVAILABLE_KEYBOARDS}")
+                return False
+
+        # Chuyển đổi văn bản nếu cần
+        input_text_converted = convert_to_telex(text) if vi else text
+        print(f"🔹 Nhập văn bản: {text} (Telex: {input_text_converted})")
+
+        # Thay thế khoảng trắng bằng %s cho ADB
+        adb_text = input_text_converted.replace(" ", "%s")
+
+        # Gửi lệnh ADB
+        subprocess.run(
+            ["adb", "shell", "input", "text", adb_text],
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        print("✅ Gửi thành công")
+        return True
+    except subprocess.CalledProcessError as e:
+        error_msg = f"❌ Lỗi khi gửi: {e}"
+        if e.stderr:
+            error_msg += f"\nChi tiết: {e.stderr}"
+        print(error_msg)
+        return False
+    except Exception as e:
+        print(f"❌ Lỗi không xác định: {e}")
+        return False
 
 def capture_screen(filename="screen.png"):
     """Chụp ảnh màn hình từ thiết bị Android."""
@@ -96,13 +176,21 @@ def tap(x, y):
     subprocess.run(["adb", "shell", "input", "tap", str(x), str(y)], check=True)
 
 def swipe_down(width, height, times=1):
-    """Vuốt màn hình xuống `times` lần để tải nội dung mới."""
+    """Vuốt màn hình lên `times` lần để tải nội dung mới."""
     for _ in range(times):
-        print("🔄 Vuốt màn hình xuống")
+        print("🔄 Vuốt màn hình lên")
         subprocess.run(["adb", "shell", "input", "swipe", str(width // 2), str(height - 300),
                         str(width // 2), "300", "500"], check=True)
         time.sleep(1.5)
 
+def swipe_up(width, height, times=1):
+    """Vuốt màn hình xuống `times` lần."""
+    for _ in range(times):
+        print("🔄 Vuốt màn hình xuống")
+        subprocess.run(["adb", "shell", "input", "swipe", str(width // 2), "300",
+                        str(width // 2), str(height - 300), "500"], check=True)
+        time.sleep(1.5)
+        
 def find_button(image_name, threshold=0.7):
     screen_path = capture_screen()
     screen = cv2.imread(screen_path, cv2.IMREAD_GRAYSCALE)
@@ -120,12 +208,20 @@ def find_button(image_name, threshold=0.7):
     if template is None:
         print(f"⚠️ Lỗi khi đọc ảnh mẫu: {template_path}")
         return None
-
+    # Lấy kích thước của screen
+    screen_height, screen_width = screen.shape
     best_match = None
+
     best_value = 0
 
-    for scale in [1.0, 0.9, 0.8, 1.1]:  
+    for scale in [1.0, 0.9, 0.8, 0.7]:  
         resized_template = cv2.resize(template, (0, 0), fx=scale, fy=scale)
+        templ_height, templ_width = resized_template.shape
+
+        # Kiểm tra kích thước trước khi gọi matchTemplate
+        if templ_height > screen_height or templ_width > screen_width:
+            print(f"⚠️ Kích thước mẫu ({templ_width}x{templ_height}) lớn hơn màn hình ({screen_width}x{screen_height}), bỏ qua scale {scale}")
+            continue    
         result = cv2.matchTemplate(screen, resized_template, cv2.TM_CCOEFF_NORMED)
         _, max_val, _, max_loc = cv2.minMaxLoc(result)
 
@@ -144,11 +240,6 @@ def find_button(image_name, threshold=0.7):
         return x + w // 2, y + h // 2  # Trả về tọa độ trung tâm nút
 
     return None
-
-def paste_text():
-    """Dán nội dung từ clipboard (chỉ hoạt động trên một số thiết bị)."""
-    subprocess.run(["adb", "shell", "input", "keyevent", "279"], check=True)  # 279 = Ctrl + V
-    time.sleep(1)
 
 def find_text(text_to_find="Đăng xuất"):
     """Tìm văn bản trên màn hình bằng OCR và in debug."""
@@ -192,7 +283,7 @@ def input_text_vietnamese(text):
     # Dán nội dung bằng Ctrl+V (KEYCODE_PASTE)
     subprocess.run(["adb", "shell", "input", "keyevent", "279"], check=True)
 
-def auto_process(now = "home", fisrtname = "Tài", lastname = "Phan Anh", day = "31", month = "12", year = "2003", sex = "male", email = "yapoko1059@hikuhu.com", password = "Khoatran2006"):
+def auto_process(now = "home", fisrtname = "Tài", lastname = "Phan Anh", day = "31", month = "12", year = "2003", sex = "male", phone = "", email = "honibeh721@oronny.com", password = "Khoatran2006"):
     width, height = get_screen_size()
     if now=="home":
         """Tự động tìm nút Home, lướt xuống 3-4 lần, rồi tìm nút 'Đăng xuất' bằng hình ảnh."""
@@ -214,7 +305,7 @@ def auto_process(now = "home", fisrtname = "Tài", lastname = "Phan Anh", day = 
             if logout_position:
                 tap(*logout_position)
                 print("🚪 Đã nhấn vào nút 'Đăng xuất1' (hình ảnh).")
-                time.sleep(0.5)
+                time.sleep(1)
                 break
             else:
                 print("🔍 Không tìm thấy 'Đăng xuất1', vuốt xuống tiếp...")
@@ -254,30 +345,30 @@ def auto_process(now = "home", fisrtname = "Tài", lastname = "Phan Anh", day = 
             time.sleep(1)
             
     # Đăng ký
-    for _ in range(5):
+    for _ in range(3):
         register_position = find_button("register_lastname", threshold=0.8)
         if register_position:
             tap(*register_position)
             print("📝 Đã nhấn vào form 'Họ'.")
-            time.sleep(1)
-            input_text(lastname)
+            time.sleep(0.2)
+            input_text(lastname,True)
             break
         else:
             print("🔍 Không tìm thấy 'Họ', vuốt xuống tiếp...")
             swipe_down(width, height, times=1)
-            time.sleep(1)
+            time.sleep(0.5)
     for _ in range(5):
         register_position = find_button("register_firstname", threshold=0.8)
         if register_position:
             tap(*register_position)
             print("📝 Đã nhấn vào form 'Tên'.")
-            time.sleep(1)
-            input_text(fisrtname)
+            time.sleep(0.2)
+            input_text(fisrtname,True)
             break
         else:
             print("🔍 Không tìm thấy 'Tên', vuốt xuống tiếp...")
             swipe_down(width, height, times=1)
-            time.sleep(1)
+            time.sleep(0.5)
     for _ in range(5):
         register_position = find_button("next", threshold=0.8)
         if register_position:
@@ -287,54 +378,54 @@ def auto_process(now = "home", fisrtname = "Tài", lastname = "Phan Anh", day = 
         else:
             print("🔍 Không tìm thấy 'Tiếp', vuốt xuống tiếp...")
             swipe_down(width, height, times=1)
-            time.sleep(1)
+            time.sleep(0.5)
     for _ in range(5):
         register_position = find_button("birthday_year", threshold=0.8)
         if register_position:
             tap(*register_position)
             print("📝 Đã nhấn vào form 'Năm Sinh Nhật'.")
             input_text(year)
-            time.sleep(1)
+            time.sleep(0.2)
             break
         else:
             print("🔍 Không tìm thấy 'Năm Sinh Nhật'")
             # swipe_down(width, height, times=1)
-            time.sleep(1)
+            time.sleep(0.5)
     for _ in range(5):
         register_position = find_button("birthday_month", threshold=0.8)
         if register_position:
             tap(*register_position)
             print("📝 Đã nhấn vào form 'Tháng Sinh Nhật'.")
             input_text(f"Th{month}")
-            time.sleep(1)
+            time.sleep(0.2)
             break
         else:
             print("🔍 Không tìm thấy 'Tháng Sinh Nhật'")
             # swipe_down(width, height, times=1)
-            time.sleep(1)
+            time.sleep(0.5)
     for _ in range(5):
         register_position = find_button("birthday_day", threshold=0.8)
         if register_position:
             tap(*register_position)
             print("📝 Đã nhấn vào form 'Ngày Sinh Nhật'.")
             input_text(day)
-            time.sleep(1)
+            time.sleep(0.2)
             break
         else:
             print("🔍 Không tìm thấy 'Ngày Sinh Nhật'")
             # swipe_down(width, height, times=1)
-            time.sleep(1)
+            time.sleep(0.5)
     for _ in range(5):
         register_position = find_button("birthday_set", threshold=0.8)
         if register_position:
             tap(*register_position)
             print("📝 Đã nhấn vào đặt 'Sinh Nhật'.")
-            time.sleep(1)
+            time.sleep(0.5)
             break
         else:
             print("🔍 Không tìm thấy đặt 'Sinh Nhật', vuốt xuống tiếp...")
             swipe_down(width, height, times=1)
-            time.sleep(1)
+            time.sleep(0.5)
     for _ in range(5):
         register_position = find_button("next", threshold=0.8)
         if register_position:
@@ -344,7 +435,7 @@ def auto_process(now = "home", fisrtname = "Tài", lastname = "Phan Anh", day = 
         else:
             print("🔍 Không tìm thấy 'Tiếp', vuốt xuống tiếp...")
             swipe_down(width, height, times=1)
-            time.sleep(1)
+            time.sleep(0.5)
     for _ in range(5):
         if sex == "male":
             register_position = find_button("male", threshold=0.8)
@@ -357,7 +448,7 @@ def auto_process(now = "home", fisrtname = "Tài", lastname = "Phan Anh", day = 
         else:
             print("🔍 Không tìm thấy '"+sex+"', vuốt xuống tiếp...")
             swipe_down(width, height, times=1)
-            time.sleep(1)
+            time.sleep(0.5)
     for _ in range(5):
         register_position = find_button("next", threshold=0.8)
         if register_position:
@@ -367,29 +458,43 @@ def auto_process(now = "home", fisrtname = "Tài", lastname = "Phan Anh", day = 
         else:
             print("🔍 Không tìm thấy 'Tiếp', vuốt xuống tiếp...")
             swipe_down(width, height, times=1)
-            time.sleep(1)
-    for _ in range(5):
-        register_position = find_button("convert_email", threshold=0.8)
-        if register_position:
-            tap(*register_position)
-            print("🚪 Đã nhấn vào nút 'Đăng ký bằng email'.")
-            break
-        else:
-            print("🔍 Không tìm thấy 'Đăng ký bằng email', vuốt xuống tiếp...")
-            swipe_down(width, height, times=1)
-            time.sleep(1)
-    for _ in range(5):
-        register_position = find_button("email", threshold=0.8)
-        if register_position:
-            tap(*register_position)
-            print("📝 Đã nhấn vào form 'email'.")
-            input_text(email)
-            time.sleep(1)
-            break
-        else:
-            print("🔍 Không tìm thấy 'email', vuốt xuống tiếp...")
-            swipe_down(width, height, times=1)
-            time.sleep(1)
+            time.sleep(0.5)
+    if phone:
+        for _ in range(5):
+            register_position = find_button("phone", threshold=0.8)
+            if register_position:
+                tap(*register_position)
+                print("📝 Đã nhấn vào form 'Số di động'.")
+                input_text(phone)
+                time.sleep(0.2)
+                break
+            else:
+                print("🔍 Không tìm thấy 'Số di động', vuốt xuống tiếp...")
+                swipe_down(width, height, times=1)
+                time.sleep(0.5)
+    else:
+        for _ in range(5):
+            register_position = find_button("convert_email", threshold=0.8)
+            if register_position:
+                tap(*register_position)
+                print("🚪 Đã nhấn vào nút 'Đăng ký bằng email'.")
+                break
+            else:
+                print("🔍 Không tìm thấy 'Đăng ký bằng email', vuốt xuống tiếp...")
+                swipe_down(width, height, times=1)
+                time.sleep(0.5)
+        for _ in range(5):
+            register_position = find_button("email", threshold=0.8)
+            if register_position:
+                tap(*register_position)
+                print("📝 Đã nhấn vào form 'email'.")
+                input_text(email)
+                time.sleep(0.2)
+                break
+            else:
+                print("🔍 Không tìm thấy 'email', vuốt xuống tiếp...")
+                swipe_down(width, height, times=1)
+                time.sleep(0.5)
     for _ in range(5):
         register_position = find_button("next", threshold=0.8)
         if register_position:
@@ -399,19 +504,19 @@ def auto_process(now = "home", fisrtname = "Tài", lastname = "Phan Anh", day = 
         else:
             print("🔍 Không tìm thấy 'Tiếp', vuốt xuống tiếp...")
             swipe_down(width, height, times=1)
-            time.sleep(1)
+            time.sleep(0.5)
     for _ in range(5):
         register_position = find_button("password", threshold=0.8)
         if register_position:
             tap(*register_position)
             print("📝 Đã nhấn vào form 'mật khẩu'.")
             input_text(password)
-            time.sleep(1)
+            time.sleep(0.2)
             break
         else:
             print("🔍 Không tìm thấy 'Mật khẩu', vuốt xuống tiếp...")
             swipe_down(width, height, times=1)
-            time.sleep(1)
+            time.sleep(0.5)
     for _ in range(5):
         register_position = find_button("next", threshold=0.8)
         if register_position:
@@ -421,7 +526,7 @@ def auto_process(now = "home", fisrtname = "Tài", lastname = "Phan Anh", day = 
         else:
             print("🔍 Không tìm thấy 'Tiếp', vuốt xuống tiếp...")
             swipe_down(width, height, times=1)
-            time.sleep(1)
+            time.sleep(0.5)
     for _ in range(5):
         register_position = find_button("next", threshold=0.8)
         if register_position:
@@ -431,7 +536,7 @@ def auto_process(now = "home", fisrtname = "Tài", lastname = "Phan Anh", day = 
         else:
             print("🔍 Không tìm thấy 'Tiếp', vuốt xuống tiếp...")
             swipe_down(width, height, times=1)
-            time.sleep(1)
+            time.sleep(0.5)
     for _ in range(5):
         register_position = find_button("save", threshold=0.8)
         if register_position:
@@ -441,7 +546,7 @@ def auto_process(now = "home", fisrtname = "Tài", lastname = "Phan Anh", day = 
         else:
             print("🔍 Không tìm thấy 'Lưu', vuốt xuống tiếp...")
             swipe_down(width, height, times=1)
-            time.sleep(1)
+            time.sleep(0.5)
     for _ in range(5):
         register_position = find_button("dongy", threshold=0.8)
         if register_position:
@@ -451,7 +556,7 @@ def auto_process(now = "home", fisrtname = "Tài", lastname = "Phan Anh", day = 
         else:
             print("🔍 Không tìm thấy 'Đồng ý', vuốt xuống tiếp...")
             swipe_down(width, height, times=1)
-            time.sleep(1)
+            time.sleep(0.5)
     madung = False
     while(madung==False):
         ma = input("Nhập mã xác nhận: ")
@@ -461,12 +566,12 @@ def auto_process(now = "home", fisrtname = "Tài", lastname = "Phan Anh", day = 
                 tap(*register_position)
                 print("📝 Đã nhấn vào form 'Mã xác nhận'.")
                 input_text(ma)
-                time.sleep(1)
+                time.sleep(0.2)
                 break
             else:
                 print("🔍 Không tìm thấy 'Mã xác nhận', vuốt xuống tiếp...")
                 swipe_down(width, height, times=1)
-                time.sleep(1)
+                time.sleep(0.5)
         for _ in range(5):
             register_position = find_button("next", threshold=0.8)
             if register_position:
@@ -477,7 +582,7 @@ def auto_process(now = "home", fisrtname = "Tài", lastname = "Phan Anh", day = 
             else:
                 print("🔍 Không tìm thấy 'Tiếp', vuốt xuống tiếp...")
                 swipe_down(width, height, times=1)
-                time.sleep(1)
+                time.sleep(0.5)
 
         
 
@@ -486,5 +591,5 @@ def auto_process(now = "home", fisrtname = "Tài", lastname = "Phan Anh", day = 
     print(f"Đã tạo thành công email: {email}, Password: {password}")
 
 if __name__ == "__main__":
-    now = input()
+    now = input("Nhập trang hiện tại: ")
     auto_process(now)
