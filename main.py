@@ -4,7 +4,7 @@ import time
 
 import cv2
 
-def find(adb, button, press=False, rate=False, leftright=False, topbottom=False):
+def find(adb, button, press=False, rate=False, leftright=False, topbottom=False, maxRate = 0.8):
     dem = 0
     while True:
         dem += 1
@@ -39,7 +39,7 @@ def find(adb, button, press=False, rate=False, leftright=False, topbottom=False)
         print(mid)
         
         # Vẽ chấm đỏ tại vị trí mid
-        if maxVal >= 0.8:
+        if maxVal >= maxRate:
             cv2.circle(img, mid, 10, (0, 255, 0), -1)  # Vẽ vòng tròn đỏ (bán kính 10)
             cv2.imwrite("imgkiemtra_with_dot.png", img)  # Lưu ảnh với chấm đỏ
             
@@ -64,6 +64,8 @@ def find(adb, button, press=False, rate=False, leftright=False, topbottom=False)
 if __name__ == "__main__":
     gtinh = "male"
     adb = adb.ADBController(debug=False)
+    
+    # exit()
     width_heght = adb.get_device_info()["resolution"]
     if "x" in width_heght: 
         width = int(width_heght.split("x")[0])
@@ -72,30 +74,43 @@ if __name__ == "__main__":
         width = 0
         heght = 0
     adb.capture_screenshot("imgkiemtra.png")
+
+    ## Tạo tài khoản facebook.
+    # exit()
     adb.restart_app("com.facebook.katana")
     time.sleep(5)
-    if find(adb, "register1",rate=True) > find(adb, "home",rate=True):
-        print("Đang vào trang đăng kí")
-        while(find(adb, "register1")==False):
-            dem = 0
-            adb.restart_app("com.facebook.katana")
-            time.sleep(2)
-            if dem > 3:
-                exit("Lỗi trang đăng nhập!!")
-    else: 
-        print("Đang vào trang đăng nhập")
-        while(find(adb, "home", leftright=1)==False):
-            dem = 0
-            adb.restart_app("com.facebook.katana")
-            time.sleep(2)
-            if dem > 3:
-                exit("Lỗi trang home!!")
-        time.sleep(1)
-        adb.swipe(width/2,heght-30,width/2,60,600)
-        print("Đang vào trang logout")
-        find(adb, "logout1")
-        find(adb, "logout2")
-        find(adb, "register1")
+    while True: 
+        dem = 0   
+        qua = 1
+        if find(adb, "register1",rate=True) > find(adb, "home",rate=True):
+            print("Đang vào trang đăng kí")
+            while(find(adb, "register1")==False):
+                adb.restart_app("com.facebook.katana")
+                time.sleep(3)
+                if dem > 3:
+                    exit("Lỗi trang đăng kí!!")
+                    qua = 0
+                dem+=1           
+        else: 
+            print("Đang vào trang Home")
+            while(find(adb, "home", leftright=1)==False):
+                adb.restart_app("com.facebook.katana")
+                time.sleep(3)
+                if dem > 3:
+                    print("Lỗi trang home!!")
+                    qua = 0
+                    break
+                dem+=1
+            if (qua == 1):
+                time.sleep(1)
+                adb.swipe(width/2,heght-30,width/2,60,600)
+                print("Đang vào trang logout")
+                find(adb, "logout1")
+                find(adb, "logout2")
+                time.sleep(3)
+                find(adb, "register1")
+        if (qua == 1):
+            break         
     find(adb, "register2.1")
     if find(adb, "register_lastname") == False:
         exit("Lỗi phần Lastname")
@@ -140,10 +155,12 @@ if __name__ == "__main__":
     if find(adb, "password") == False:
         exit("Lỗi phần Password")
     else:
-        adb.input_text("TranDangKhoa",True)
+        adb.input_text("TranKhoa2006",True)
     if find(adb, "next") == False:
         exit("Lỗi phần Next")
-    if find(adb, "save") == False:
-        exit("Lỗi phần Next")
-    
+    time.sleep(5)
+    if find(adb, "save", maxRate=0.95) == False:
+        exit("Lỗi phần Save")
+    if find(adb, "dongy", maxRate=0.95) == False:
+        exit("Lỗi phần dongy")
     

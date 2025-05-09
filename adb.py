@@ -286,7 +286,7 @@ if __name__ == "__main__":
     try:
         adb = ADBController(None, debug=True)  # Chạy với debug để kiểm tra
         adb.get_device_info()
-
+        
         # Cài đặt Facebook APK
         apk_path = "com.facebook.katana.apk"
         adb.install_apk(apk_path, override_existing=True)
