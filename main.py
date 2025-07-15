@@ -9,7 +9,7 @@ name, ho, gtinh = "Khoa", "Tranfa", "Nữ"  # Họ tên và giới tính
 ngay_sinh, thang_sinh, nam_sinh = "31", "12", "2006"  # Ngày tháng năm sinh
 sdt_or_email = "email"  # "sdt" hoặc "email"
 matkhau = "TranKhoa2006"
-stop_signal, thoat, history = False, 0, []
+stop_signal, thoat, history, flages = False, 0, [], False
 tempEmail = None  # email tạm thời
 tokenEmail = "5140|hz51HFd1BrKQAbkQ1XXD3PDhHtZ2fXf8dejBnLBS446104c9"
 
@@ -150,7 +150,7 @@ def detect_and_show():
 
 # ─────────────────────────── XỬ LÝ HÀNH ĐỘNG ─────────────────────────── #
 def handle_actions():
-    global stop_signal, shared_predictions, history
+    global stop_signal, shared_predictions, history, flages
     print("📌 [handle_actions] Started")
     while not stop_signal:
         detect_event.set()
@@ -283,48 +283,74 @@ def handle_actions():
             continue
 
         if all(k in js_predictions for k in ["input_so_di_dong", "redirect_email"]):
+            if not flages:
+                flages = True
+                time.sleep(2)
+                detect_event.set()
+                handled = True
+                continue
+
             if sdt_or_email == "sdt":
                 tap_and_detect(js_predictions["input_so_di_dong"]["box"][0], js_predictions["input_so_di_dong"]["box"][1])
                 phone.input_text(sdt_or_email, True)
+                time.sleep(1.5)  # 💡 Delay trước khi bấm "next"
                 tap_and_detect(js_predictions["next"]["box"][0], js_predictions["next"]["box"][1])
-                time.sleep(1)
                 print("✅ Nhập số điện thoại thành công!")
-                time.sleep(3)
+                time.sleep(3)  # ⏳ Đợi giao diện load
+
+                # Nhập mật khẩu
                 tap_and_detect(js_predictions["input_so_di_dong"]["box"][0], js_predictions["input_so_di_dong"]["box"][1] - js_predictions["input_so_di_dong"]["box"][3])
                 phone.input_text(matkhau, True)
+                time.sleep(1)
                 tap_and_detect(js_predictions["input_so_di_dong"]["box"][0], js_predictions["input_so_di_dong"]["box"][1] + js_predictions["input_so_di_dong"]["box"][3])
+                flages = False
             else:
                 tap_and_detect(js_predictions["redirect_email"]["box"][0], js_predictions["redirect_email"]["box"][1])
+                time.sleep(1)  # 💡 Chờ chuyển giao diện
                 print("✅ Chuyển sang email thành công!")
-            detect_event.set()  # Gọi cập nhật ảnh mới sau thao tác
+
+            time.sleep(1)  # ⏳ Delay trước khi chụp lại khung hình
+            detect_event.set()
             handled = True
             continue
-
         if all(k in js_predictions for k in ["input_email", "redirect_so_dien_thoai"]):
+            if not flages:
+                flages = True
+                time.sleep(2)
+                detect_event.set()
+                handled = True
+                continue
+
             if sdt_or_email == "email":
-                # Lấy email tạm thời
                 if not history or "input_email" not in history:
                     history.append("input_email")
                     global tempEmail
-                    if (tempEmail == "") or (tempEmail is None): 
+                    if not tempEmail:
                         tempEmail = get_temp_email()
+
                     long_press_and_detect(js_predictions["input_email"]["box"][0], js_predictions["input_email"]["box"][1], 5000)
                     phone.input_text(tempEmail["email"], True)
-                    detect_event.set()  # Gọi cập nhật ảnh mới sau thao tác
-                    time.sleep(1)
+                    time.sleep(1.5)  # ⏳ Đợi nhập xong
+                    flages = False
                 else:
                     tap_and_detect(js_predictions["next"]["box"][0], js_predictions["next"]["box"][1])
                     print("✅ Nhập email thành công!")
                     time.sleep(5)
+
+                    # Nhập mật khẩu
                     tap_and_detect(js_predictions["input_email"]["box"][0], js_predictions["input_email"]["box"][1] - js_predictions["input_email"]["box"][3])
                     phone.input_text(matkhau, True)
+                    time.sleep(1)
                     tap_and_detect(js_predictions["input_email"]["box"][0], js_predictions["input_email"]["box"][1] + js_predictions["input_email"]["box"][3])
                     history.clear()
                     print("✅ Nhập mật khẩu thành công!")
             else:
                 tap_and_detect(js_predictions["redirect_so_dien_thoai"]["box"][0], js_predictions["redirect_so_dien_thoai"]["box"][1])
                 print("✅ Chuyển sang số điện thoại thành công!")
-            detect_event.set()  # Gọi cập nhật ảnh mới sau thao tác
+                time.sleep(1)
+
+            time.sleep(1.5)  # ⏳ Chờ giao diện cập nhật xong rồi mới chụp
+            detect_event.set()
             handled = True
             continue
 
