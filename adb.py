@@ -1,5 +1,5 @@
 import os
-import time
+import time, subprocess
 from datetime import datetime
 
 class ADBController:
@@ -18,6 +18,17 @@ class ADBController:
                 raise Exception(f"Thiết bị {id_device} không được kết nối!")
         else:
             self.device_id = self._select_device()
+
+        self._start_scrcpy_with_uhid()
+
+    def _start_scrcpy_with_uhid(self):
+        """Chạy scrcpy với --keyboard=uhid và --no-video để tránh bật bàn phím ảo"""
+        try:
+            self._print("Khởi động scrcpy với --keyboard=uhid và không hiển thị hình...")
+            subprocess.Popen(["scrcpy", "--keyboard=uhid", "--no-video", "--no-window", "--serial", self.device_id])
+            time.sleep(2)
+        except Exception as e:
+            self._print(f"Lỗi khi khởi chạy scrcpy: {e}")
 
     def _print(self, message):
         if self.debug:
@@ -160,7 +171,7 @@ class ADBController:
         try:
             if delete:
                 self._print("Xóa văn bản hiện tại...")
-                for _ in range(50):
+                for _ in range(5):
                     self._run_adb_command("shell input keyevent 67")
                     # time.sleep(0.05)
                 self._print("Đã xóa văn bản hiện tại")
@@ -283,39 +294,39 @@ class ADBController:
 
 # Ví dụ sử dụng
 if __name__ == "__main__":
-    try:
+    # try:
         adb = ADBController(None, debug=True)  # Chạy với debug để kiểm tra
         adb.get_device_info()
-        
-        # Cài đặt Facebook APK
-        apk_path = "com.facebook.katana.apk"
-        adb.install_apk(apk_path, override_existing=True)
+        adb.input_text("Hello World")
+    #     # Cài đặt Facebook APK
+    #     apk_path = "com.facebook.katana.apk"
+    #     adb.install_apk(apk_path, override_existing=True)
 
-        # Khởi động Facebook
-        if adb.launch_app("com.facebook.katana"):
-            time.sleep(3)
-            adb.tap(500, 500)  # Giả lập click vào một tọa độ
-            adb.input_text("Hello Facebook")  # Nhập mà không xóa
-            time.sleep(2)
-            adb.delete_left(5)  # Xóa 5 ký tự về phía trái
-            time.sleep(1)
-            adb.input_text("New Text", delete=True)  # Xóa toàn bộ trước khi nhập
-            time.sleep(2)
-        else:
-            print("Không thể mở ứng dụng, thử khởi động lại...")
-            adb.restart_app("com.facebook.katana")
+    #     # Khởi động Facebook
+    #     if adb.launch_app("com.facebook.katana"):
+    #         time.sleep(3)
+    #         adb.tap(500, 500)  # Giả lập click vào một tọa độ
+    #         adb.input_text("Hello Facebook")  # Nhập mà không xóa
+    #         time.sleep(2)
+    #         adb.delete_left(5)  # Xóa 5 ký tự về phía trái
+    #         time.sleep(1)
+    #         adb.input_text("New Text", delete=True)  # Xóa toàn bộ trước khi nhập
+    #         time.sleep(2)
+    #     else:
+    #         print("Không thể mở ứng dụng, thử khởi động lại...")
+    #         adb.restart_app("com.facebook.katana")
 
-        # Thoát ứng dụng
-        adb.close_app("com.facebook.katana")
-        time.sleep(2)
+    #     # Thoát ứng dụng
+    #     adb.close_app("com.facebook.katana")
+    #     time.sleep(2)
 
-        # Khởi động lại ứng dụng
-        adb.restart_app("com.facebook.katana")
-        time.sleep(3)
+    #     # Khởi động lại ứng dụng
+    #     adb.restart_app("com.facebook.katana")
+    #     time.sleep(3)
 
-        # Các thao tác khác
-        adb.press_back()
-        adb.press_home()
-        adb.press_recent()
-    except Exception as e:
-        print(f"Lỗi khởi tạo: {str(e)}")
+    #     # Các thao tác khác
+    #     adb.press_back()
+    #     adb.press_home()
+    #     adb.press_recent()
+    # except Exception as e:
+    #     print(f"Lỗi khởi tạo: {str(e)}")
