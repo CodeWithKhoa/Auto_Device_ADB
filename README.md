@@ -1,6 +1,6 @@
-# FaceAutoVN – Automated Facebook Account Creator
+### FaceAutoVN – Automated Facebook Account, Image Processing & ADB Control Creator
 
-###**FaceAutoVN** is a Python-based automation framework combining ADB control and AI-driven image processing (YOLOv10) for seamless Facebook account creation on Android devices. The solution centers on two core modules: `main.py` (workflow orchestration + on-device image SDK) and `adb.py` (ADBController).
+**FaceAutoVN** is a Python-based automation framework combining ADB control and AI-driven image processing (YOLOv10) for seamless Facebook account creation on Android devices. The solution centers on two core modules: `main.py` (workflow orchestration + on-device image SDK) and `adb.py` (ADBController).
 
 ---
 
