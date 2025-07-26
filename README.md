@@ -53,8 +53,8 @@
 ## 4. Installation & Configuration
 
 ```bash
-git clone https://github.com/CodeWithKhoa/Auto_tap_on_phone.git
-cd Auto_tap_on_phone
+git clone https://github.com/CodeWithKhoa/FaceAutoVN.git
+cd FaceAutoVN
 pip install -r requirements.txt
 ```
 
